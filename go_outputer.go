@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
@@ -14,14 +15,23 @@ import (
 
 var sqlFile string
 var outputFile string
+var format string
+var separatorType string
 var reset int
 var confFile = "outputer.conf"
 
 func main() {
-	flag.StringVar(&sqlFile, "f", "qry.sql", "待执行的sql的名称")
+	flag.StringVar(&format, "f", "csv", "导出类型 支持json和csv，默认csv")
+	flag.StringVar(&separatorType, "t", "comma", "csv文件分隔符 comma tab,默认comma(逗号)")
+	flag.StringVar(&sqlFile, "s", "qry.sql", "待执行的sql的名称")
 	flag.StringVar(&outputFile, "o", "", "导出的文件名称")
 	flag.IntVar(&reset, "r", 0, "-reset=1 重置数据库链接或者直接删除"+confFile)
 	flag.Parse()
+
+	separator := ","
+	if separatorType == "tab" {
+		separator = "\t"
+	}
 
 	//处理数据库连接输入
 	var dbUrl string
@@ -84,9 +94,14 @@ func main() {
 	//创建导出文件
 	var fileName string
 	if (outputFile) != "" {
+		if format == "csv" && !strings.Contains(outputFile, ".csv") {
+			outputFile = outputFile + ".csv"
+		} else if format == "json" && !strings.Contains(outputFile, ".json") {
+			outputFile = outputFile + ".json"
+		}
 		fileName = outputFile
 	} else {
-		fileName = time.Now().Format("20060102-150405导出.csv")
+		fileName = time.Now().Format("20060102-150405导出." + format)
 	}
 	_ = os.Remove(fileName)
 	_, _ = os.Create(fileName)
@@ -98,36 +113,64 @@ func main() {
 
 	//写入header
 	header, err := rows.Columns()
-	_, err = file.Write([]byte( strings.Join(header, ",") + "\n"))
-	var contentList [] interface{}
+	var contentList []interface{}
 	for range header {
 		var val sql.NullString
 		contentList = append(contentList, &val)
 	}
 
-	count := 0
+	var resultList [][]string
 	for rows.Next() {
 		err := rows.Scan(contentList...)
 		if err != nil {
 			println("获取一行数据错误", err.Error())
 			return
 		} else {
-			var strList [] string
+			var strList []string
 			for _, value := range contentList {
 				sqlStr, ok := value.(*sql.NullString)
 				if ok {
 					strList = append(strList, (*sqlStr).String)
 				}
 			}
-			_, err = file.Write([]byte(strings.ReplaceAll(strings.Join(strList, ","), "\n", " ") + "\n"))
+			resultList = append(resultList, strList)
+		}
+	}
+
+	if format == "csv" {
+		//写入header
+		_, err = file.Write([]byte(strings.Join(header, separator) + "\n"))
+		for _, rowList := range resultList {
+			_, err = file.Write([]byte(strings.ReplaceAll(strings.Join(rowList, separator), "\n", " ") + "\n"))
 			if err != nil {
 				println("数据写入文件错误", err.Error())
 				return
 			}
 		}
-		count++
+	} else if format == "json" {
+		var jsonList []map[string]string
+		for _, rowList := range resultList {
+			tempMap := make(map[string]string)
+			for headerIndex, headerValue := range header {
+				tempMap[headerValue] = rowList[headerIndex]
+			}
+			jsonList = append(jsonList, tempMap)
+		}
+
+		writeData, err := json.Marshal(jsonList)
+		if err != nil {
+			println("json格式化错误", err.Error())
+			return
+		}
+
+		_, err = file.Write(writeData)
+		if err != nil {
+			println("数据写入文件错误", err.Error())
+			return
+		}
 	}
-	println("数据导出完成,共导出" + strconv.Itoa(count) + "条数据" + " 导出文件 " + fileName)
+
+	println("数据导出完成,共导出" + strconv.Itoa(len(resultList)) + "条数据" + " 导出文件 " + fileName)
 }
 
 func PathExists(path string) bool {

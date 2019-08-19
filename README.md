@@ -4,9 +4,9 @@
 
 ### 如何使用
 将data_outputer拷贝到目标机器上去
-1、执行chmod +x data_outputer, 赋予程序执行权限
-2、在data_outputer同级目录填写一个qry.sql的文件，并填入相关的查询sql
-3、然后就可以使用具体的命令来导出了，具体下文的使用示例
+1、执行chmod +x data_outputer, 赋予程序执行权限  
+2、在data_outputer同级目录填写一个qry.sql的文件，并填入相关的查询sql  
+3、然后就可以使用具体的命令来导出了，具体下文的使用示例  
 
 ### 参数解释
 * **-s**  指定你需要执行的sql文件，默认为qry.sql

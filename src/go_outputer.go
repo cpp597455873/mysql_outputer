@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"os"
@@ -17,6 +18,7 @@ var sqlFile string
 var outputFile string
 var format string
 var separatorType string
+var insertTableName string
 var reset int
 var confFile = "outputer.conf"
 
@@ -26,6 +28,7 @@ func main() {
 	flag.StringVar(&sqlFile, "s", "qry.sql", "待执行的sql的名称")
 	flag.StringVar(&outputFile, "o", "", "导出的文件名称")
 	flag.IntVar(&reset, "r", 0, "-reset=1 重置数据库链接或者直接删除"+confFile)
+	flag.StringVar(&insertTableName, "n", "xxxtable", "sql导出的时候的表名")
 	flag.Parse()
 
 	separator := ","
@@ -98,6 +101,8 @@ func main() {
 			outputFile = outputFile + ".csv"
 		} else if format == "json" && !strings.Contains(outputFile, ".json") {
 			outputFile = outputFile + ".json"
+		} else if format == "sql" && !strings.Contains(outputFile, ".sql") {
+			outputFile = outputFile + ".sql"
 		}
 		fileName = outputFile
 	} else {
@@ -143,7 +148,7 @@ func main() {
 		for _, rowList := range resultList {
 			_, err = file.Write([]byte(strings.ReplaceAll(strings.Join(rowList, separator), "\n", " ") + "\n"))
 			if err != nil {
-				println("数据写入文件错误", err.Error())
+				println("数据写入csv文件错误", err.Error())
 				return
 			}
 		}
@@ -156,7 +161,6 @@ func main() {
 			}
 			jsonList = append(jsonList, tempMap)
 		}
-
 		writeData, err := json.Marshal(jsonList)
 		if err != nil {
 			println("json格式化错误", err.Error())
@@ -167,6 +171,15 @@ func main() {
 		if err != nil {
 			println("数据写入文件错误", err.Error())
 			return
+		}
+	} else if format == "sql" {
+		for _, rowList := range resultList {
+			sqlStr := fmt.Sprintf("insert into %s ('%s') values ('%s');\n", insertTableName, strings.Join(header, "','"), strings.Join(rowList, "','"))
+			_, err = file.Write([]byte(sqlStr))
+			if err != nil {
+				println("数据写入sql文件错误", err.Error())
+				return
+			}
 		}
 	}
 

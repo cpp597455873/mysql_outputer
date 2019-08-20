@@ -9,6 +9,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,8 @@ var separatorType string
 var insertTableName string
 var reset int
 var confFile = "outputer.conf"
+var separator = ","
+var dbUrl = ""
 
 func main() {
 	flag.StringVar(&format, "f", "csv", "导出类型 支持json和csv，默认csv")
@@ -31,13 +34,11 @@ func main() {
 	flag.StringVar(&insertTableName, "n", "xxxtable", "sql导出的时候的表名")
 	flag.Parse()
 
-	separator := ","
 	if separatorType == "tab" {
 		separator = "\t"
 	}
 
 	//处理数据库连接输入
-	var dbUrl string
 	isInput := false
 	if !PathExists(confFile) || reset == 1 {
 		f := bufio.NewReader(os.Stdin)
@@ -77,7 +78,28 @@ func main() {
 		return
 	}
 
-	rows, err := db.Query(string(sqlData))
+	sqlStr := string(sqlData)
+	if strings.Count(sqlStr, ";") > 1 {
+		sqlList := strings.Split(sqlStr, ";")
+		for _, sql := range sqlList {
+			doExport(db, sql, isInput)
+		}
+	} else {
+		doExport(db, sqlStr, isInput)
+	}
+
+}
+
+func doExport(db *sql.DB, realSql string, isInput bool) {
+	if len(regexp.MustCompile("\\s").ReplaceAllString(realSql, "")) == 0 {
+		return
+	} else {
+		println(realSql)
+	}
+
+	fileNameConf, tableNameConf, formatConf := GetConfig(realSql)
+
+	rows, err := db.Query(realSql)
 	if err != nil {
 		println("数据库查询错误", err.Error())
 		println("请检查数据库连接配置，如要修改请删除" + confFile + "或者在启动参数加上--reset=true")
@@ -96,17 +118,17 @@ func main() {
 
 	//创建导出文件
 	var fileName string
-	if (outputFile) != "" {
-		if format == "csv" && !strings.Contains(outputFile, ".csv") {
-			outputFile = outputFile + ".csv"
-		} else if format == "json" && !strings.Contains(outputFile, ".json") {
-			outputFile = outputFile + ".json"
-		} else if format == "sql" && !strings.Contains(outputFile, ".sql") {
-			outputFile = outputFile + ".sql"
+	if (fileNameConf) != "" {
+		if formatConf == "csv" && !strings.Contains(fileNameConf, ".csv") {
+			fileNameConf = fileNameConf + ".csv"
+		} else if formatConf == "json" && !strings.Contains(fileNameConf, ".json") {
+			fileNameConf = fileNameConf + ".json"
+		} else if formatConf == "sql" && !strings.Contains(fileNameConf, ".sql") {
+			fileNameConf = fileNameConf + ".sql"
 		}
-		fileName = outputFile
+		fileName = fileNameConf
 	} else {
-		fileName = time.Now().Format("20060102-150405导出." + format)
+		fileName = time.Now().Format("20060102-150405导出." + formatConf)
 	}
 	_ = os.Remove(fileName)
 	_, _ = os.Create(fileName)
@@ -142,7 +164,7 @@ func main() {
 		}
 	}
 
-	if format == "csv" {
+	if formatConf == "csv" {
 		//写入header
 		_, err = file.Write([]byte(strings.Join(header, separator) + "\n"))
 		for _, rowList := range resultList {
@@ -152,7 +174,7 @@ func main() {
 				return
 			}
 		}
-	} else if format == "json" {
+	} else if formatConf == "json" {
 		var jsonList []map[string]string
 		for _, rowList := range resultList {
 			tempMap := make(map[string]string)
@@ -172,9 +194,9 @@ func main() {
 			println("数据写入文件错误", err.Error())
 			return
 		}
-	} else if format == "sql" {
+	} else if formatConf == "sql" {
 		for _, rowList := range resultList {
-			sqlStr := fmt.Sprintf("insert into %s ('%s') values ('%s');\n", insertTableName, strings.Join(header, "','"), strings.Join(rowList, "','"))
+			sqlStr := fmt.Sprintf("insert into %s ('%s') values ('%s');\n", tableNameConf, strings.Join(header, "','"), strings.Join(rowList, "','"))
 			_, err = file.Write([]byte(sqlStr))
 			if err != nil {
 				println("数据写入sql文件错误", err.Error())
@@ -184,6 +206,29 @@ func main() {
 	}
 
 	println("数据导出完成,共导出" + strconv.Itoa(len(resultList)) + "条数据" + " 导出文件 " + fileName)
+}
+
+func GetConfig(str string) (string, string, string) {
+	file := ReadConfFromStr(str, "file", outputFile)
+	table := ReadConfFromStr(str, "table", insertTableName)
+	formatConf := ReadConfFromStr(str, "format", format)
+	return file, table, formatConf
+}
+
+func ReadConfFromStr(str string, key string, defaultValue string) string {
+	keyStr := "#" + key + "="
+	if strings.Contains(str, keyStr) {
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, keyStr) {
+				result := strings.ReplaceAll(regexp.MustCompile("\\s").ReplaceAllString(line, ""), keyStr, "")
+				if len(result) != 0 {
+					return result
+				}
+			}
+		}
+	}
+	return defaultValue
 }
 
 func PathExists(path string) bool {

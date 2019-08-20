@@ -3,7 +3,7 @@
 为什么有这个工具？因为我们经常需要导出数据，但是我们的普通的机器可能没有权限导出数据。我们就需要登录到目标机器上去导出数据，但是我们登录的数据库用户又没有导出权限,这个时候这个工具的就体现出来了。原本写的python脚本，但是python脚本有他的劣势就是机器上要安装python以及相关的依赖，这个时候我们很有可能被限制不能安装这些依赖或者我们不想动到机器上的依赖，这个工具就是一个很适合的工具。
 
 ### 如何使用
-将data_outputer拷贝到目标机器上去
+将data_outputer拷贝到目标机器上去  
 1、执行chmod +x data_outputer, 赋予程序执行权限  
 2、在data_outputer同级目录填写一个qry.sql的文件，并填入相关的查询sql  
 3、然后就可以使用具体的命令来导出了，具体下文的使用示例  
@@ -36,4 +36,28 @@
 ### 3.导出为sql
 ```
 ./data_outputer -f=sql -n=your_table_name
+```
+
+### 4.批量sql导出
+```
+qry.sql
+
+#file=student.csv
+#format=csv
+select * from student;
+
+#file=teacher.json
+#format=json
+select * from teacher;
+
+#file=school.sql
+#format=sql
+#table=school
+select * from school;
+
+
+
+./data_outputer 
+说明:上述命令导出了两个SQL，并使用student.csv，teacher.json 作为文件名，写法#file=  #format=  #table= 作为其文件名 导出格式
+注意: 1、sql之前请用分号隔开 2、 #file=  #format=  #table= 需要单独的一行
 ```

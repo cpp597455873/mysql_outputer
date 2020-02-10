@@ -65,5 +65,3 @@ select * from school;
 
 
 
-
-

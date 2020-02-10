@@ -61,3 +61,9 @@ select * from school;
 说明:上述命令导出了两个SQL，并使用student.csv，teacher.json 作为文件名，写法#file=  #format=  #table= 作为其文件名 导出格式
 注意: 1、sql之前请用分号隔开 2、 #file=  #format=  #table= 需要单独的一行
 ```
+
+
+
+
+
+
